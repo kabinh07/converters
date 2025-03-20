@@ -1,6 +1,5 @@
 opencv-python
 scipy
-torch
 pillow
-tensorrt
-torch-tensorrt
+# tensorrt
+# torch-tensorrt

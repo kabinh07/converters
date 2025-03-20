@@ -53,12 +53,18 @@ def test_facenet():
 
     # Prepare the data in the expected format (list of dictionaries with image data)
     data = [
-        {"data": image_1_base64},
-        {"data": image_2_base64}
+        {
+            "body": {
+                "img_1": image_1_base64,
+                "img_2": image_2_base64
+            },
+        },
     ]
 
     context = {
-        "system_properties": None
+        "system_properties": {
+            "model_dir": "/models"
+        }
     }
 
     # Test inference
@@ -93,4 +99,4 @@ def test_craft():
     sys.exit()
 
 if __name__ == "__main__":
-    test_craft()
+    test_facenet()

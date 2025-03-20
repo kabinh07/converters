@@ -6,7 +6,9 @@ import base64
 from PIL import Image
 from io import BytesIO
 from ts.torch_handler.base_handler import BaseHandler
+from ts.utils.util import PredictionException
 from scipy.spatial.distance import cosine
+import os
 
 class FaceNetTRTHandler(BaseHandler):
     def __init__(self):
@@ -16,19 +18,27 @@ class FaceNetTRTHandler(BaseHandler):
 
     def initialize(self, ctx):
         """Load the TensorRT model and initialize inference context."""
-        # properties = ctx.system_properties
-        model_path = f"models/facenet.pt"
-        torch_model = torch.jit.load(model_path)
-        self.model = torch.compile(torch_model, backend = "tensorrt")
+        properties = ctx.system_properties
+        model_dir = properties.get('model_dir')
+        model_path = os.path.join(model_dir, "facenet.pt")
+        self.model = torch.jit.load(model_path, map_location=self.device)
+        # self.model = torch.compile(torch_model, backend = "tensorrt")
         self.model = self.model.to(self.device)
+        self.model.eval()
 
     def preprocess(self, data):
         """Preprocess images using OpenCV for face detection and TensorRT for face recognition."""
+        data = data[0].get("body") or data[0].get("data")
+        img_1 = data.get("img_1")
+        img_2 = data.get("img_2")
+
+        if not img_1 or not img_2:
+            raise PredictionException("Invalid data provided for inference", 513)
         preprocessed_images = []
-        for row in data:
-            image = row.get("data") or row.get("body")
-            if isinstance(image, list):  # If the image data is a list, get the first element
-                image = image[0]
+        image_data = [img_1, img_2]
+        if not len(image_data) == 2:
+            raise PredictionException("Enter two images for inference", 513)
+        for image in image_data:
             split = image.strip().split(',')
             if len(split) < 2:
                 raise PredictionException("Invalid image", 513)
@@ -82,13 +92,15 @@ class FaceNetTRTHandler(BaseHandler):
 
     def postprocess(self, inference_output):
         """Postprocess results and compute similarity."""
+        similarity = 0.0
         if inference_output is None or len(inference_output) < 2:
-            return [{"error": "Insufficient faces detected"}]
+            return [{"similarity": similarity}]
         
         emb1, emb2 = inference_output[0], inference_output[1]
         similarity = self.calculate_similarity(emb1, emb2)
-        
-        return [{"similarity": similarity}]
+
+        # Ensure similarity is JSON serializable
+        return [{"similarity": float(similarity)}]
 
     def handle(self, data, context):
         """Main handler function for TorchServe."""
